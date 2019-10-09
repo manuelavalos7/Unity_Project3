@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class playerMovement : MonoBehaviour
 {
@@ -14,7 +16,13 @@ public class playerMovement : MonoBehaviour
     [SerializeField] Tilemap tileForeground;
     [SerializeField] Tilemap tileWalls;
     [SerializeField] GameObject[] enemies;
-    
+    [SerializeField] Sprite openChest;
+    private GameObject lastSavePoint;
+    private Vector2 lastSavePosition; //integer representation on grid
+    private Vector2[] startPoint = {new Vector2(0.25f,0.3f), new Vector2(0.25f, 0.3f), new Vector2(0.25f, 0.3f) };
+
+    private int totalskulls = 0;
+    private int numskulls = 0;
     private Vector3Int max;
     private Vector3Int min;
     private Vector2 playerPosition = Vector2.zero;
@@ -25,7 +33,8 @@ public class playerMovement : MonoBehaviour
     {
         min = new Vector3Int(-17, -9, 0);
         max = new Vector3Int(16, 8, 0);
-        transform.position = new Vector3(0.25f, 0.25f, 0);//starts at offset of 0.25 because of anchors on sprites
+        GameObject.Find("boxLeftText").GetComponent<Text>().text = "skulls Left: " + numskulls;
+       
     }
 
     // Update is called once per frame
@@ -40,11 +49,11 @@ public class playerMovement : MonoBehaviour
         moveCooldown -= Time.deltaTime * speed;
         if (Input.GetMouseButton(0))
         {
-            placeObstacle(Camera.main.ScreenToWorldPoint(Input.mousePosition));
+            placeObstacle(Camera.main.ScreenToWorldPoint(Input.mousePosition), false);
         }
         if (Input.GetMouseButton(1))
         {
-            highlightTile(Camera.main.ScreenToWorldPoint(Input.mousePosition));
+            placeObstacle(Camera.main.ScreenToWorldPoint(Input.mousePosition), true);
         }
 
 
@@ -71,7 +80,7 @@ public class playerMovement : MonoBehaviour
             }
             if (change.x != 0)
             {
-                transform.localScale = new Vector3(-change.x, transform.localScale.y, transform.localScale.z);//flips sprite if player moved on x axis
+                transform.localScale = new Vector3(change.x, transform.localScale.y, transform.localScale.z);//flips sprite if player moved on x axis
             }
             foreach (GameObject e in enemies)
             {
@@ -103,7 +112,7 @@ public class playerMovement : MonoBehaviour
         TileBase selected = tileBackground.GetTile(tileBackground.WorldToCell(tile));
     }
 
-    private void placeObstacle(Vector2 tile)
+    private void placeObstacle(Vector2 tile, bool remove)
     {
 
         tile.x = (tile.x * 2);
@@ -117,11 +126,21 @@ public class playerMovement : MonoBehaviour
             tile.y -= 1;
         }
         Vector3Int position = new Vector3Int((int)tile.x, (int)tile.y, 0);
-        if (canPlaceObstacle(position)) {
+        if (!remove && numskulls > 0 && canPlaceObstacle(position)) {
             tileObstacles.SetTile(position, boxTile);
             tileForeground.SetTile(new Vector3Int(position.x, position.y + 1, 0), boxTileTop);
+            numskulls--;
+            GameObject.Find("boxLeftText").GetComponent<Text>().text = "skulls Left: "+numskulls;
         }
+        else if (tileObstacles.GetTile(position) != null && remove)
+        {
+            tileObstacles.SetTile(position, null);
+            tileForeground.SetTile(new Vector3Int(position.x, position.y + 1, 0), null);
         
+            numskulls++;
+            GameObject.Find("boxLeftText").GetComponent<Text>().text = "skulls Left: " + numskulls;
+        }
+
     }
 
     private bool canPlaceObstacle(Vector3Int tile_position) {
@@ -144,6 +163,46 @@ public class playerMovement : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        Debug.Log(collision.tag);
+        if (collision.tag == "boxCollect")
+        {
+            totalskulls++;
+            numskulls++;
+            Destroy(collision.gameObject);
+            GameObject.Find("boxLeftText").GetComponent<Text>().text = "skulls Left: " + numskulls;
+        }
+        else if (collision.tag == "SavePoint")
+        {
+            lastSavePoint = collision.gameObject;
+            lastSavePosition = playerPosition;
+            collision.gameObject.GetComponent<torchScript>().toggleLight();
+        }
+        else if (collision.tag == "Win")
+        {
+            WinLevel(SceneManager.GetActiveScene().buildIndex, collision.gameObject);
+        }
+        else if (collision.tag == "Enemy") {
+            if (lastSavePoint != null)
+            {
+                playerPosition = lastSavePosition;
+                transform.position = lastSavePoint.transform.position;
+            }
+            else
+            {
+                playerPosition = new Vector2(0, 0);
+                Debug.Log(startPoint[SceneManager.GetActiveScene().buildIndex]);
+                transform.position = startPoint[SceneManager.GetActiveScene().buildIndex];
+            }
+        }
+    }
+
+    private void WinLevel(int index, GameObject chest)
+    {
+        chest.GetComponent<SpriteRenderer>().sprite = openChest;
     }
 
 }
